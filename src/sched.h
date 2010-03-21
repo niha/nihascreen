@@ -37,7 +37,6 @@ struct event
   int pri;
   struct timeval timeout;
   int queued;		/* in evs queue */
-  int active;		/* in fdset */
   int *condpos;		/* only active if condpos - condneg > 0 */
   int *condneg;
 };
