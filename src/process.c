@@ -222,6 +222,7 @@ char **blankerprg;
 #endif
 
 struct action ktab[256 + KMAP_KEYS];	/* command key translation table */
+struct action exktab[256 + KMAP_KEYS];
 struct kclass {
   struct kclass *next;
   char *name;
@@ -666,6 +667,19 @@ InitKeytab()
   idleaction.argl = 0;
 }
 
+void
+InitExKeytab()
+{
+  int i;
+  for (i = 0; i < (int)(sizeof(exktab)/sizeof(*exktab)); i++)
+    {
+       exktab[i].nr = RC_ILLEGAL;
+       exktab[i].args = noargs;
+       exktab[i].argl = 0;
+       exktab[i].quiet = 0;
+    }
+}
+
 static struct action *
 FindKtab(class, create)
 char *class;
@@ -900,16 +914,31 @@ int ilen;
 	{
 	  while (ilen > 0)
 	    {
-	      if ((unsigned char)*s++ == D_user->u_Esc)
-		break;
+	      if ((unsigned char)*s == D_user->u_Esc)
+		{
+                  slen -= ilen;
+                  if (slen)
+                    DoProcess(fore, &ibuf, &slen, 0);
+                  if (--ilen == 0)
+                    D_ESCseen = ktab;
+                  goto DO_ACTION;
+		}
+	      else if (exktab[(unsigned char)*s].nr != RC_ILLEGAL)
+		{
+                  slen -= ilen;
+                  if (slen)
+                    DoProcess(fore, &ibuf, &slen, 0);
+                  D_ESCseen = exktab;
+                  goto DO_ACTION;
+		}
 	      ilen--;
+              s++;
 	    }
 	  slen -= ilen;
 	  if (slen)
 	    DoProcess(fore, &ibuf, &slen, 0);
-	  if (--ilen == 0)
-	    D_ESCseen = ktab;
 	}
+      DO_ACTION:
       if (ilen <= 0)
         return;
       ktabp = D_ESCseen ? D_ESCseen : ktab;
@@ -3236,6 +3265,14 @@ int key;
 		  argl++;
 		  argc--;
 		}
+              else if (argc > 1 && !strcmp(*args, "-e"))
+                {
+                  ktabp = exktab;
+                  args++;
+                  argl++;
+                  argc--;
+                }
+
 	      else
 	        break;
 	    }

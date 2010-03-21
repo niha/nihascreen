@@ -1345,6 +1345,7 @@ char **av;
   
   ServerSocket = MakeServerSocket();
   InitKeytab();
+  InitExKeytab();
 #ifdef ETCSCREENRC
 # ifdef ALLOW_SYSSCREENRC
   if ((ap = getenv("SYSSCREENRC")))

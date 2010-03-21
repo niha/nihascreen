@@ -190,6 +190,7 @@ extern void  InitPTY __P((int));
 
 /* process.c */
 extern void  InitKeytab __P((void));
+extern void  InitExKeytab __P((void));
 extern void  ProcessInput __P((char *, int));
 #ifdef MAPKEYS
 extern void  ProcessInput2 __P((char *, int));
