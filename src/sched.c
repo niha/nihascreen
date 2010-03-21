@@ -39,7 +39,6 @@
 static struct event *evs;
 static struct event *tevs;
 static struct event *nextev;
-static int calctimeout;
 
 static struct event *calctimo __P((void));
 #if (defined(sgi) && defined(SVR4)) || defined(__osf__) || defined(M_UNIX)
@@ -57,7 +56,6 @@ struct event *ev;
   evpp = &evs;
   if (ev->type == EV_TIMEOUT)
     {
-      calctimeout = 1;
       evpp = &tevs;
     }
   for (; (evp = *evpp); evpp = &evp->next)
@@ -79,7 +77,6 @@ struct event *ev;
   evpp = &evs;
   if (ev->type == EV_TIMEOUT)
     {
-      calctimeout = 1;
       evpp = &tevs;
     }
   for (; (evp = *evpp); evpp = &evp->next)
@@ -126,9 +123,7 @@ sched()
 
   for (;;)
     {
-      if (calctimeout)
-	timeoutev = calctimo();
-      if (timeoutev)
+      if (timeoutev = calctimo())
 	{
 	  gettimeofday(&timeout, NULL);
 	  /* tp - timeout */
@@ -254,8 +249,6 @@ int timo;
       ev->timeout.tv_usec -= 1000000;
       ev->timeout.tv_sec++;
     }
-  if (ev->queued)
-    calctimeout = 1;
 }
 
 
