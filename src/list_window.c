@@ -289,14 +289,24 @@ gl_Window_input(struct ListData *ldata, char **inp, int *len)
   struct display *cd = display;
   struct gl_Window_Data *wdata = ldata->data;
 
-  if (!ldata->selected)
-    return 0;
-
   ch = (unsigned char) **inp;
+
+  if (!ldata->selected) {
+    switch (ch)
+      {
+      case 010:	 /* ^H */
+      case 0177: /* Backspace */
+        break;
+      default:
+        return 0;
+      }
+  } else {
+    win = ldata->selected->data;
+  }
+
   ++*inp;
   --*len;
 
-  win = ldata->selected->data;
   switch (ch)
     {
     case ' ':
