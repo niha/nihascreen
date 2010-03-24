@@ -297,6 +297,11 @@ gl_Window_input(struct ListData *ldata, char **inp, int *len)
       case 010:	 /* ^H */
       case 0177: /* Backspace */
         break;
+
+      case 'K':
+        win = wdata->group; /* kill group */
+        break;
+
       default:
         return 0;
       }
@@ -418,8 +423,12 @@ gl_Window_input(struct ListData *ldata, char **inp, int *len)
     case 'K':	/* Kill a window */
       {
 	char str[MAXSTR];
-	snprintf(str, sizeof(str) - 1, "Really kill window %d (%s) [y/n]",
-	    win->w_number, win->w_title);
+        if (win != wdata->group) {
+          snprintf(str, sizeof(str) - 1, "Really kill window %d (%s) [y/n]",
+              win->w_number, win->w_title);
+        } else {
+          snprintf(str, sizeof(str) - 1, "Really kill this gruop [y/n]");
+        }
 	Input(str, 1, INP_RAW, window_kill_confirm, (char *)win, 0);
       }
       break;
