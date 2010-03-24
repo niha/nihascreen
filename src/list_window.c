@@ -427,7 +427,7 @@ gl_Window_input(struct ListData *ldata, char **inp, int *len)
           snprintf(str, sizeof(str) - 1, "Really kill window %d (%s) [y/n]",
               win->w_number, win->w_title);
         } else {
-          snprintf(str, sizeof(str) - 1, "Really kill this gruop [y/n]");
+          snprintf(str, sizeof(str) - 1, "Really kill this group [y/n]");
         }
 	Input(str, 1, INP_RAW, window_kill_confirm, (char *)win, 0);
       }
