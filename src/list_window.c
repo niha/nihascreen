@@ -284,31 +284,12 @@ gl_Window_row(struct ListData *ldata, struct ListRow *lrow)
 static int
 gl_Window_input(struct ListData *ldata, char **inp, int *len)
 {
-  struct win *win;
+  struct win *win_selected = ldata->selected ? ldata->selected->data : 0;
   unsigned char ch;
   struct display *cd = display;
   struct gl_Window_Data *wdata = ldata->data;
 
   ch = (unsigned char) **inp;
-
-  if (!ldata->selected) {
-    switch (ch)
-      {
-      case 010:	 /* ^H */
-      case 0177: /* Backspace */
-        break;
-
-      case 'K':
-        win = wdata->group; /* kill group */
-        break;
-
-      default:
-        return 0;
-      }
-  } else {
-    win = ldata->selected->data;
-  }
-
   ++*inp;
   --*len;
 
@@ -317,21 +298,21 @@ gl_Window_input(struct ListData *ldata, char **inp, int *len)
     case ' ':
     case '\n':
     case '\r':
-      if (!win)
+      if (!win_selected)
 	break;
 #ifdef MULTIUSER
-      if (display && AclCheckPermWin(D_user, ACL_READ, win))
+      if (display && AclCheckPermWin(D_user, ACL_READ, win_selected))
 	return;		/* Not allowed to switch to this window. */
 #endif
       if (WLIST_FOR_GROUP(wdata))
-	SwitchWindow(win->w_number);
+	SwitchWindow(win_selected->w_number);
       else
 	{
 	  /* Abort list only when not in a group window. */
 	  glist_abort();
 	  display = cd;
-	  if (D_fore != win)
-	    SwitchWindow(win->w_number);
+	  if (D_fore != win_selected)
+	    SwitchWindow(win_selected->w_number);
 	}
       *len = 0;
       break;
@@ -394,42 +375,48 @@ gl_Window_input(struct ListData *ldata, char **inp, int *len)
       break;
 
     case ',':	/* Switch numbers with the previous window. */
+      if (!win_selected)
+        break;
       if (wdata->order == WLIST_NUM && ldata->selected->prev)
 	{
 	  struct win *pw = ldata->selected->prev->data;
-	  if (win->w_group != pw->w_group)
+	  if (win_selected->w_group != pw->w_group)
 	    break;	/* Do not allow switching with the parent group */
 
 	  /* When a windows's number is successfully changed, it triggers a WListUpdatecv
 	   * with NULL window. So that causes a redraw of the entire list. So reset the
 	   * 'selected' after that. */
-	  wdata->fore = win;
-	  WindowChangeNumber(win, pw->w_number);
+	  wdata->fore = win_selected;
+	  WindowChangeNumber(win_selected, pw->w_number);
 	}
       break;
 
     case '.':	/* Switch numbers with the next window. */
+      if (!win_selected)
+        break;
       if (wdata->order == WLIST_NUM && ldata->selected->next)
 	{
 	  struct win *nw = ldata->selected->next->data;
-	  if (win->w_group != nw->w_group)
+	  if (win_selected->w_group != nw->w_group)
 	    break;	/* Do not allow switching with the parent group */
 
-	  wdata->fore = win;
-	  WindowChangeNumber(win, nw->w_number);
+	  wdata->fore = win_selected;
+	  WindowChangeNumber(win_selected, nw->w_number);
 	}
       break;
 
     case 'K':	/* Kill a window */
       {
 	char str[MAXSTR];
-        if (win != wdata->group) {
+        struct win *target;
+        if (win_selected) {
           snprintf(str, sizeof(str) - 1, "Really kill window %d (%s) [y/n]",
-              win->w_number, win->w_title);
-        } else {
+              win_selected->w_number, win_selected->w_title);
+          target = win_selected;
+        } else if (wdata->group) {
           snprintf(str, sizeof(str) - 1, "Really kill this group [y/n]");
         }
-	Input(str, 1, INP_RAW, window_kill_confirm, (char *)win, 0);
+	Input(str, 1, INP_RAW, window_kill_confirm, (char *)target, 0);
       }
       break;
 
