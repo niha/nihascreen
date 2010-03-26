@@ -99,8 +99,9 @@ window_ancestor(struct win *a, struct win *d)
 static void
 window_kill_confirm(char *buf, int len, char *data)
 {
-  struct win *w = windows;
   struct action act;
+  struct ListData *ldata;
+  struct win *w;
 
   if (len || (*buf != 'y' && *buf != 'Y'))
     {
@@ -108,15 +109,34 @@ window_kill_confirm(char *buf, int len, char *data)
       return;
     }
 
-  /* Loop over the windows to make sure that the window actually still exists. */
-  for (; w; w = w->w_next)
-    if (w == (struct win *)data)
-      break;
+  ldata = (struct ListData *)data;
 
-  if (!w)
+  if (!ldata)
     return;
 
-  /* Pretend the selected window is the foreground window. Then trigger a non-interactive 'kill' */
+  if (ldata->selected)
+    {
+      for (w = windows; w; w = w->w_next)
+        if (w == (struct win *)ldata->selected->data)
+          break;
+      if (!w)
+        return;
+      
+      if (ldata->selected->prev)
+        ldata->selected = ldata->selected->prev;
+      else if (ldata->selected->next)
+        ldata->selected = ldata->selected->next;
+    }
+  else
+    {
+      struct gl_Window_Data *wdata = ldata->data;
+      if (!wdata)
+        return;
+      w = wdata->group;
+      if (!w)
+        return;
+    }
+
   fore = w;
   act.nr = RC_KILL;
   act.args = noargs;
@@ -408,15 +428,13 @@ gl_Window_input(struct ListData *ldata, char **inp, int *len)
     case 'K':	/* Kill a window */
       {
 	char str[MAXSTR];
-        struct win *target;
         if (win_selected) {
           snprintf(str, sizeof(str) - 1, "Really kill window %d (%s) [y/n]",
               win_selected->w_number, win_selected->w_title);
-          target = win_selected;
         } else if (wdata->group) {
           snprintf(str, sizeof(str) - 1, "Really kill this group [y/n]");
         }
-	Input(str, 1, INP_RAW, window_kill_confirm, (char *)target, 0);
+	Input(str, 1, INP_RAW, window_kill_confirm, (char *)ldata, 0);
       }
       break;
 
