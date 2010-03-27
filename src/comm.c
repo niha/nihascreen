@@ -211,7 +211,7 @@ struct comm comms[RC_LAST + 1] =
 #ifdef ENCODINGS
   { "kanji",		NEED_FORE|ARGS_12 },
 #endif
-  { "kill",		NEED_FORE|ARGS_0 },
+  { "kill",		NEED_FORE|ARGS_01 },
   { "lastmsg",		CAN_QUERY|NEED_DISPLAY|ARGS_0 },
   { "layout",           ARGS_1|ARGS_ORMORE},
   { "license",		NEED_LAYER|ARGS_0 },

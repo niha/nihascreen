@@ -1303,6 +1303,7 @@ int key;
     case RC_KILL:
       {
 	char *name;
+	struct win *target;
 
 	if (key >= 0)
 	  {
@@ -1322,8 +1323,15 @@ int key;
 	    break;
 	  }
 #endif
-	name = SaveStr(fore->w_title);
-	KillWindow(fore);
+        target = fore;
+
+	if (argc == 1 && !strcmp(*args, "-r"))
+          {
+            RemCanvas();
+            Activate(-1);
+          }
+	name = SaveStr(target->w_title);
+	KillWindow(target);
 	Msg(0, "Window %d (%s) killed.", n, name);
 	if (name)
 	  free(name);
