@@ -2979,6 +2979,12 @@ int rec;
 	      numpad++;
 	    }
 	  break;
+        case 'Q':
+          *p = 0;
+          strcpy(p, (display && D_layout) ? D_layout->lay_title : "-none-");
+          qmflag = 1;
+          p += strlen(p) - 1;
+          break;
 	case 'n':
 	  s++;
 	  /* FALLTHROUGH */
