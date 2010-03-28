@@ -2985,6 +2985,12 @@ int rec;
           qmflag = 1;
           p += strlen(p) - 1;
           break;
+        case 'g':
+          *p = 0;
+          strcpy(p, (win->w_type == W_TYPE_GROUP) ? "[g]" : "");
+          qmflag = 1;
+          p += strlen(p) - 1;
+          break;
 	case 'n':
 	  s++;
 	  /* FALLTHROUGH */
