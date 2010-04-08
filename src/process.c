@@ -426,6 +426,7 @@ static struct digraph digraphs[MAX_DIGRAPH + 1] = {
 #define RESIZE_FLAG_H 1
 #define RESIZE_FLAG_V 2
 #define RESIZE_FLAG_L 4
+#define RESIZE_FLAG_C 8
 
 static char *resizeprompts[] = {
   "resize # lines: ",
@@ -4035,6 +4036,8 @@ int key;
 	    i |= D_forecv->c_slorient == SLICE_VERT ? RESIZE_FLAG_H : RESIZE_FLAG_V;
 	  else if (!strcmp(*args, "-l"))
 	    i |= RESIZE_FLAG_L;
+          else if (!strcmp(*args, "-c"))
+            i |= RESIZE_FLAG_C;
 	  else
 	    break;
 	}
@@ -4046,7 +4049,7 @@ int key;
       if (*args)
 	ResizeRegions(*args, i);
       else
-	Input(resizeprompts[i], 20, INP_EVERY, ResizeFin, (char*)0, i);
+	Input(resizeprompts[i&7], 20, INP_EVERY, ResizeFin, (char*)0, i);
       break;
     case RC_SETSID:
       (void)ParseSwitch(act, &separate_sids);
@@ -6588,15 +6591,18 @@ int percent;
 }
 
 static int
-ChangeCanvasSize(fcv, abs, diff, gflag, percent)
+ChangeCanvasSize(fcv, abs, diff, gflag, percent, cflag)
 struct canvas *fcv;	/* make this canvas bigger */
 int abs;		/* mode: 0:rel 1:abs 2:max */
 int diff;		/* change this much */
 int gflag;		/* go up if neccessary */
 int percent;
+int cflag;              /* hjkl mode */
 {
   struct canvas *cv;
   int done, have, m, dir;
+
+  if (cflag && !fcv->c_slnext) diff = -diff;
 
   debug3("ChangeCanvasSize abs %d diff %d percent=%d\n", abs, diff, percent);
   if (abs == 0 && diff == 0)
@@ -6612,7 +6618,7 @@ int percent;
 	  fcv->c_slweight = 1;
 	  cv = fcv->c_slback->c_slback;
 	  if (gflag && cv && cv->c_slback)
-	    ChangeCanvasSize(cv, abs, diff, gflag, percent);
+	    ChangeCanvasSize(cv, abs, diff, gflag, percent, cflag);
 	}
       return diff;
     }
@@ -6711,7 +6717,7 @@ int percent;
       /* need more room! */
       cv = fcv->c_slback->c_slback;
       if (cv && cv->c_slback)
-        done += ChangeCanvasSize(fcv->c_slback->c_slback, 0, diff, gflag, percent);
+        done += ChangeCanvasSize(fcv->c_slback->c_slback, 0, diff, gflag, percent, cflag);
     }
   fcv->c_slweight += done;
   debug1("ChangeCanvasSize returns %d\n", done);
@@ -6725,7 +6731,7 @@ int flags;
 {
   struct canvas *cv;
   int diff, l;
-  int gflag = 0, abs = 0, percent = 0;
+  int gflag = 0, abs = 0, percent = 0, cflag = 0;
   int orient = 0;
 
   ASSERT(display);
@@ -6737,6 +6743,7 @@ int flags;
       return;
     }
   gflag = flags & RESIZE_FLAG_L ? 0 : 1;
+  cflag = flags & RESIZE_FLAG_C ? 1 : 0;
   orient |= flags & RESIZE_FLAG_H ? SLICE_HORI : 0;
   orient |= flags & RESIZE_FLAG_V ? SLICE_VERT : 0;
   if (orient == 0)
@@ -6797,9 +6804,9 @@ int flags;
     diff = diff * percent / 100;
   cv = D_forecv;
   if (cv->c_slorient & orient)
-    ChangeCanvasSize(cv, abs, diff, gflag, percent);
+    ChangeCanvasSize(cv, abs, diff, gflag, percent, cflag);
   if (cv->c_slback->c_slorient & orient)
-    ChangeCanvasSize(cv->c_slback, abs, diff, gflag, percent);
+    ChangeCanvasSize(cv->c_slback, abs, diff, gflag, percent, cflag);
 
   ResizeCanvas(&D_canvas);
   RecreateCanvasChain();
