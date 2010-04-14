@@ -2991,6 +2991,12 @@ int rec;
           qmflag = 1;
           p += strlen(p) - 1;
           break;
+        case 'G':
+          *p = 0;
+          strcpy(p, D_fore && D_fore->w_group ? D_fore->w_group->w_title : "root");
+          qmflag = 1;
+          p += strlen(p) - 1;
+          break;
 	case 'n':
 	  s++;
 	  /* FALLTHROUGH */
