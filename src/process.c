@@ -139,6 +139,7 @@ static int  ParseWinNum __P((struct action *, int *));
 static int  ParseBase __P((struct action *, char *, int *, int, char *));
 static int  ParseNum1000 __P((struct action *, int *));
 static char **SaveArgs __P((char **));
+static void FreeArgs __P((char **));
 static int  IsNum __P((char *, int));
 static void Colonfin __P((char *, int, char *));
 static void InputSelect __P((void));
@@ -170,6 +171,10 @@ static void ResizeFin __P((char *, int, char *));
 static struct action *FindKtab __P((char *, int));
 static void SelectFin __P((char *, int, char *));
 static void SelectLayoutFin __P((char *, int, char *));
+#ifdef PSEUDOS
+static void ExecArgsFin __P((char *, int, char *));
+static void FreePriv __P((char *));
+#endif
 
 
 extern struct layer *flayer;
@@ -3542,7 +3547,32 @@ int key;
 #endif /* MULTIUSER */
 #ifdef PSEUDOS
     case RC_EXEC:
-      winexec(args);
+      if (!strncmp(*args, "-i", 2)) {
+        char prompt[MAXSTR];
+        char **priv_args;
+        size_t prompt_len = strlen(*args + 2) + 1;
+
+        if (prompt_len > MAXSTR)
+          {
+            Msg(0, "prompt message too long.");
+            break;
+          }
+
+        if (prompt_len == 1)
+          {
+            strcpy(prompt, "Input Args:");
+          }
+        else
+          {
+            strcpy(prompt, *args + 2);
+            strcat(prompt, ":");
+          }
+        priv_args = SaveArgs(args + 1);
+        if (!InputForAllocatedData(prompt, 100, INP_COOKED, ExecArgsFin, (char *)priv_args, FreePriv))
+          FreeArgs(priv_args);
+      } else {
+        winexec(args);
+      }
       break;
 #endif
 #ifdef MULTI
@@ -5803,7 +5833,102 @@ char *data;	/* dummy */
     }
 }
 
-    
+#ifdef PSEUDOS
+static char *
+ReplaceString(original, search, replace)
+const char *original, *search, *replace;
+{
+  char* result;
+  const char *head, *tmp;
+  int count;
+  size_t result_len;
+  size_t original_len = strlen(original);
+  size_t search_len = strlen(search);
+  size_t replace_len = strlen(replace);
+
+  if (search_len == 0)
+    {
+      result = malloc(original_len);
+      strcpy(result, original);
+      return result;
+    }
+
+  count = 0;
+  for (tmp = original; tmp = strstr(tmp, search); tmp += search_len)
+    count++;
+  result_len = original_len + (replace_len - search_len) * count;
+  result = malloc(result_len);
+
+  if (count == 0)
+    {
+      strcpy(result, original);
+      return result;
+    }
+
+  result[0] = '\0';
+  for (head = original; tmp = strstr(head, search); head = tmp + search_len)
+    {
+      strncat(result, head, tmp - head);
+      strcat(result, replace);
+    }
+  strcat(result, head);
+
+  return result;
+}
+
+static void
+FreeArgs(args)
+char **args;
+{
+  char **tmp;
+  if (tmp == NULL)
+    return;
+  for (tmp = args; *tmp; tmp++)
+    free(*tmp);
+  free(args);
+}
+
+static void
+ExecArgsFin(buf, len, data)
+char *buf;
+int len;
+char *data;
+{
+  int i, argc;
+  size_t s;
+  char *cp, **args, **original_args = (char **)data;
+
+  if (len == 0)
+    return;
+
+  for (argc = 0; original_args[argc]; argc++)
+    ;
+
+  if ((args = (char **)malloc((unsigned)(argc + 1) * sizeof(char **))) == 0)
+    {
+      Msg(0, "%s", strnomem);
+      free(args);
+      return;
+    }
+
+  for (i = 0; i < argc; i++)
+    args[i] = ReplaceString(original_args[i], "<args>", buf);
+  args[argc] = NULL;
+
+  winexec(args);
+
+  FreeArgs(args);
+}
+
+static void
+FreePriv(priv)
+char *priv;
+{
+  FreeArgs((char **)priv);
+}
+
+#endif
+
 static void
 InputSelect()
 {

@@ -123,7 +123,8 @@ extern void  ISearch __P((int));
 
 /* input.c */
 extern void  inp_setprompt __P((char *, char *));
-extern void  Input __P((char *, int, int, void (*)(char *, int, char *), char *, int));
+extern int   Input __P((char *, int, int, void (*)(char *, int, char *), char *, int));
+extern int   InputForAllocatedData __P((char *, int, int, void (*)(char *, int, char *), char *, void (*)(char *)));
 extern int   InInput __P((void));
 
 /* help.c */
