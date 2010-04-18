@@ -34,8 +34,10 @@
 #define INPUTLINE (flayer->l_height - 1)
 
 static void InpProcess __P((char **, int *));
+static void InpProcessForAllocatedData __P((char **, int *));
 static void InpAbort __P((void));
 static void InpRedisplayLine __P((int, int, int, int));
+static void InpFree __P((void *));
 
 extern struct layer *flayer;
 extern struct display *display;
@@ -59,13 +61,19 @@ struct inpdata
 {
   struct inpline inp;
   int  inpmaxlen;	/* 100, or less, if caller has shorter buffer */
-  char *inpstring;	/* the prompt */
+  char inpstring[101];	/* the prompt */
   int  inpstringlen;	/* length of the prompt */
   int  inpmode;		/* INP_NOECHO, INP_RAW, INP_EVERY */
   void (*inpfinfunc) __P((char *buf, int len, char *priv));
   char  *priv;		/* private data for finfunc */
   int  privdata;	/* private data space */
   char *search; 	/* the search string */
+};
+
+struct inpdata_priv
+{
+  char *data;
+  void (*free) __P((char *data));
 };
 
 static struct LayFuncs InpLf =
@@ -78,6 +86,18 @@ static struct LayFuncs InpLf =
   DefResize,
   DefRestore,
   0
+};
+
+static struct LayFuncs InpForAllocatedDataLf =
+{
+  InpProcessForAllocatedData,
+  InpAbort,
+  InpRedisplayLine,
+  DefClearLine,
+  DefRewrite,
+  DefResize,
+  DefRestore,
+  InpFree
 };
 
 /*
@@ -94,8 +114,10 @@ char *p, *s;
   inpdata = (struct inpdata *)flayer->l_data;
   if (p)
     {
-      inpdata->inpstringlen = strlen(p);
-      inpdata->inpstring = p;
+      if (p != inpdata->inpstring)
+        strncpy(inpdata->inpstring, p, sizeof(inpdata->inpstring) - 1);
+      inpdata->inpstring[sizeof(inpdata->inpstring) - 1] = 0;
+      inpdata->inpstringlen = strlen(inpdata->inpstring);
     }
   if (s)
     {
@@ -109,31 +131,27 @@ char *p, *s;
   flayer->l_y = INPUTLINE;
 }
 
-/*
- * We dont use HS status line with Input().
- * If we would use it, then we should check e_tgetflag("es") if
- * we are allowed to use esc sequences there.
- *
- * mode is an OR of
- * INP_NOECHO == suppress echoing of characters.
- * INP_RAW    == raw mode. call finfunc after each character typed.
- * INP_EVERY  == digraph mode.
- */
-void
-Input(istr, len, mode, finfunc, priv, data)
+static int
+InputImpl(istr, len, mode, finfunc, priv, data, lf)
 char *istr;
 int len;
 int mode;
 void (*finfunc) __P((char *buf, int len, char *priv));
 char *priv;
 int data;
+struct LayFuncs *lf;
 {
   int maxlen;
   struct inpdata *inpdata;
   
   if (!flayer)
-    return;
+    return 0;
 
+  if (strlen(istr) > 100)
+    {
+      LMsg(0, "prompt message too long");
+      return 0;
+    }
   if (len > 100)
     len = 100;
   if (!(mode & INP_NOECHO))
@@ -145,10 +163,10 @@ int data;
   if (len < 0)
     {
       LMsg(0, "Width %d chars too small", -len);
-      return;
+      return 0;
     }
-  if (InitOverlayPage(sizeof(*inpdata), &InpLf, 1))
-    return;
+  if (InitOverlayPage(sizeof(*inpdata), lf, 1))
+    return 0;
   flayer->l_mode = 1;
   inpdata = (struct inpdata *)flayer->l_data;
   inpdata->inpmaxlen = len;
@@ -161,10 +179,50 @@ int data;
     priv = (char*)&inpdata->privdata;
   inpdata->priv = priv;
   inpdata->inpstringlen = 0;
-  inpdata->inpstring = NULL;
+  inpdata->inpstring[0] = '0';
   inpdata->search = NULL;
   if (istr)
     inp_setprompt(istr, (char *)NULL);
+  return 1;
+}
+
+/*
+ * We dont use HS status line with Input().
+ * If we would use it, then we should check e_tgetflag("es") if
+ * we are allowed to use esc sequences there.
+ *
+ * mode is an OR of
+ * INP_NOECHO == suppress echoing of characters.
+ * INP_RAW    == raw mode. call finfunc after each character typed.
+ * INP_EVERY  == digraph mode.
+ */
+int
+Input(istr, len, mode, finfunc, priv, data)
+char *istr;
+int len;
+int mode;
+void (*finfunc) __P((char *buf, int len, char *priv));
+char *priv;
+int data;
+{
+  return InputImpl(istr, len, mode, finfunc, priv, data, &InpLf);
+}
+
+int
+InputForAllocatedData(istr, len, mode, finfunc, priv, free_priv)
+char *istr;
+int len;
+int mode;
+void (*finfunc) __P((char *buf, int len, char *priv));
+char *priv;
+void (*free_priv) __P((char *priv));
+{
+  struct inpdata_priv *privdata = malloc(sizeof(struct inpdata_priv));
+  if (privdata == NULL)
+    return 0;
+  privdata->data = priv;
+  privdata->free = free_priv;
+  return InputImpl(istr, len, mode, finfunc, (char *)privdata, 0, &InpForAllocatedDataLf);
 }
 
 static void
@@ -204,9 +262,10 @@ int mv;
 }
 
 static void
-InpProcess(ppbuf, plen)
+InpProcessImpl(ppbuf, plen, priv)
 char **ppbuf;
 int *plen;
+char *priv;
 {
   int len, x;
   char *pbuf;
@@ -214,6 +273,7 @@ int *plen;
   struct inpdata *inpdata;
   struct display *inpdisplay;
   int prev, next, search = 0;
+  void (*layFree)(void *) = NULL;
 
   inpdata = (struct inpdata *)flayer->l_data;
   inpdisplay = display;
@@ -241,14 +301,14 @@ int *plen;
 	  if (ch)
 	    {
 	      display = inpdisplay;
-	      (*inpdata->inpfinfunc)(inpdata->inp.buf, inpdata->inp.len, inpdata->priv);
+	      (*inpdata->inpfinfunc)(inpdata->inp.buf, inpdata->inp.len, priv);
 	      ch = inpdata->inp.buf[inpdata->inp.len];
 	    }
 	}
       else if (inpdata->inpmode & INP_RAW)
 	{
 	  display = inpdisplay;
-          (*inpdata->inpfinfunc)(&ch, 1, inpdata->priv);	/* raw */
+          (*inpdata->inpfinfunc)(&ch, 1, priv);	/* raw */
 	  if (ch)
 	    continue;
 	}
@@ -439,17 +499,20 @@ int *plen;
 	      inphist.prev = store;
 	    }
 
+          layFree = flayer->l_layfn->lf_LayFree;
 	  flayer->l_data = 0;	/* so inpdata does not get freed */
           InpAbort();		/* redisplays... */
 	  *ppbuf = pbuf;
 	  *plen = len;
 	  display = inpdisplay;
 	  if ((inpdata->inpmode & INP_RAW) == 0)
-            (*inpdata->inpfinfunc)(inpdata->inp.buf, inpdata->inp.len, inpdata->priv);
+            (*inpdata->inpfinfunc)(inpdata->inp.buf, inpdata->inp.len, priv);
 	  else
-            (*inpdata->inpfinfunc)(pbuf - 1, 0, inpdata->priv);
+            (*inpdata->inpfinfunc)(pbuf - 1, 0, priv);
 	  if (inpdata->search)
 	    free(inpdata->search);
+          if (layFree)
+            (*layFree)(inpdata);
 	  free(inpdata);
 	  return;
 	}
@@ -468,6 +531,26 @@ int *plen;
   *ppbuf = pbuf;
   *plen = len;
 }
+
+static void
+InpProcess(ppbuf, plen)
+char **ppbuf;
+int *plen;
+{
+  struct inpdata *inpdata = (struct inpdata *)flayer->l_data;
+  InpProcessImpl(ppbuf, plen, inpdata->priv);
+}
+
+static void
+InpProcessForAllocatedData(ppbuf, plen)
+char **ppbuf;
+int *plen;
+{
+  struct inpdata *inpdata = (struct inpdata *)flayer->l_data;
+  struct inpdata_priv *priv = (struct inpdata_priv *)inpdata->priv;
+  InpProcessImpl(ppbuf, plen, priv->data);
+}
+
 
 static void
 InpAbort()
@@ -524,5 +607,16 @@ int y, xs, xe, isblank;
       LClearArea(flayer, q, y, q + l - 1, y, 0, 0);
       q += l;
     }
+}
+
+static void
+InpFree(l_data)
+void *l_data;
+{
+  struct inpdata *inpdata = (struct inpdata *)l_data;
+  struct inpdata_priv *priv = (struct inpdata_priv *)inpdata->priv;
+  if (priv->free)
+    (*priv->free)(priv->data);
+  free(priv);
 }
 
