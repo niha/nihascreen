@@ -176,6 +176,7 @@ static void ExecArgsFin __P((char *, int, char *));
 static void FreePriv __P((char *));
 #endif
 
+static int IsInGroupRecursive __P((struct win *, struct win *));
 
 extern struct layer *flayer;
 extern struct display *display, *displays;
@@ -4246,9 +4247,27 @@ int key;
 	  fore->w_group = 0;
 	  if (args[0][0])
 	    {
-	      fore->w_group = WindowByName(*args);
-	      if (fore->w_group == fore || (fore->w_group && fore->w_group->w_type != W_TYPE_GROUP))
-		fore->w_group = 0;
+              struct win *found = WindowByName(*args);
+              if (!found || found->w_type != W_TYPE_GROUP)
+                {
+                  if (msgok)
+                    Msg(0, "window group not found");
+                  break;
+                }
+              else if (found == fore)
+                {
+                  if (msgok)
+                    Msg(0, "oops");
+                  break;
+                }
+              else if (fore->w_type == W_TYPE_GROUP && IsInGroupRecursive(fore, found))
+                {
+                  if (msgok)
+                    Msg(0, "oops");
+                  break;
+                }
+
+              fore->w_group = found;
 	    }
 	  WindowChanged((struct win *)0, 'w');
 	  WindowChanged((struct win *)0, 'W');
@@ -7045,6 +7064,28 @@ char *data;
   inp_setprompt(resizeprompts[flags], NULL);
   *(int *)data = flags;
   buf[len] = '\034';
+}
+
+static int
+IsInGroupRecursive(group, win)
+struct win *group;
+struct win *win;
+{
+  struct win *w;
+
+  if (!group || group->w_type != W_TYPE_GROUP)
+    return 0;
+  if (!win)
+    return 0;
+
+  if (win->w_group == group)
+    return 1;
+
+  for (w = windows; w; w = w->w_next)
+    if (w->w_group == group && w->w_type == W_TYPE_GROUP && IsInGroupRecursive(w, win))
+      return 1;
+
+  return 0;
 }
 
 void
