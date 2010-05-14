@@ -71,9 +71,13 @@ glist_display(struct GenericList *list, const char *name)
   return ldata;
 }
 
-static void
+void
 glist_decide_top(struct ListData *ldata)
 {
+  if (!ldata->selected) {
+    ldata->top = ldata->selected;
+    return;
+  }
   int count = flayer->l_height - 5;	/* 2 for header, 1 for footer */
   struct ListRow *top = ldata->selected;
   for (; count && top != ldata->root; top = top->prev, count--)
